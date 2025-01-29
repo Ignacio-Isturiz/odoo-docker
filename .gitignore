@@ -1,0 +1,6 @@
+.env
+src/enterprise
+src/custom/*
+src/custom/odoo-venezuela/*
+src/custom/own/*
+.resources/Dockerfile
