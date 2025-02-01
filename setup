@@ -1,0 +1,25 @@
+#!/bin/bash
+
+sudo touch /bin/odoo
+sudo cat > /bin/odoo << 'EOF'
+#!/bin/bash
+
+# Busca hacia arriba hasta encontrar odoo
+current_dir=$(pwd)
+while [[ "$current_dir" != "/" ]]; do
+  if [[ -f "$current_dir/odoo" ]]; then
+    # Pasa todos los parámetros al script de Python
+    python3 "$current_dir/odoo" "$@"
+    exit 0
+  fi
+  current_dir=$(dirname "$current_dir")
+done
+
+echo "Error: odoo not found in the current directory or any parent directory." >&2
+exit 1
+EOF
+
+
+# Hacer el script ejecutable
+sudo chmod +x /bin/odoo
+
