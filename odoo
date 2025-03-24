@@ -11,7 +11,14 @@ import time
 def run_bash():
     PROJECT_NAME = os.getenv("PROJECT_NAME")
     print(f"docker exec -uroot -it {PROJECT_NAME} bash")
-    os.system(f"docker exec -uroot -it {PROJECT_NAME} bash")
+    os.system(f"docker exec -uodoo -it {PROJECT_NAME} bash")
+
+def run_new_module(module_name):
+    PROJECT_NAME = os.getenv("PROJECT_NAME")
+    file_path = str(Path(__file__).resolve().parent)
+    exec_path = os.getcwd()
+    addons_path = exec_path.replace(file_path, "/home/odoo")
+    os.system(f"docker exec -uodoo -it {PROJECT_NAME} odoo scaffold {module_name} {addons_path}")
 
 def build_odoo(no_cache):
     ODOO_VERSION = os.getenv("ODOO_VERSION")
@@ -110,7 +117,10 @@ def run_update(d, modules):
     load_dotenv()
     PROJECT_NAME = os.getenv("PROJECT_NAME")
     print(f"docker exec -it {PROJECT_NAME} odoo -d {d} -u {' '.join(modules)}")
-    os.system(f"docker exec -it {PROJECT_NAME} odoo -d {d} -u {' '.join(modules)}")
+    os.system(f"docker exec -u odoo -it {PROJECT_NAME} odoo -d {d} -u {' '.join(modules)} --stop-after-init")
+
+def run_backup(database):
+    os.system(f"docker exec -it -e PGPASSWORD=odoo,HOST=localhost,USER=odoo /home/odoo/src/backup.sh")
 
 
 def main():
@@ -136,11 +146,17 @@ def main():
 
     reset_parser = subparsers.add_parser("reset", help="Sync Submodules")
     reset_parser.add_argument("database", help="database")
-    reset_parser.add_argument("--l", action="store_true", default="admin", help="login")
+    reset_parser.add_argument("-l", default="admin", help="login")
 
     update_parser = subparsers.add_parser("u", help="update modules")
     update_parser.add_argument("database", help="database")
     update_parser.add_argument("modules")
+
+    backup_parser = subparsers.add_parser("backup", help="Backup")
+    backup_parser.add_argument("database", help="database")
+
+    new_module_parser = subparsers.add_parser("nm", help="New Module")
+    new_module_parser.add_argument("module_name", help="Module Name")
 
     # Parsear los argumentos
     args = parser.parse_args()
@@ -164,6 +180,10 @@ def main():
         reset_password(args.database,l=args.l)
     elif args.action == "u":
         run_update(args.database, args.modules.split(","))
+    elif args.action == "backup":
+        run_backup(args.database)
+    elif args.action == "nm":
+        run_new_module(args.module_name)
     # else:
     #     PROJECT_NAME = os.getenv("PROJECT_NAME")
     #     print(args)
