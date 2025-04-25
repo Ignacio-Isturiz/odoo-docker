@@ -13,12 +13,14 @@ def run_bash():
     print(f"docker exec -uroot -it {PROJECT_NAME} bash")
     os.system(f"docker exec -uodoo -it {PROJECT_NAME} bash")
 
+
 def run_new_module(module_name):
     PROJECT_NAME = os.getenv("PROJECT_NAME")
     file_path = str(Path(__file__).resolve().parent)
     exec_path = os.getcwd()
     addons_path = exec_path.replace(file_path, "/home/odoo")
     os.system(f"docker exec -uodoo -it {PROJECT_NAME} odoo scaffold {module_name} {addons_path}")
+
 
 def build_odoo(no_cache):
     ODOO_VERSION = os.getenv("ODOO_VERSION")
@@ -35,9 +37,7 @@ def build_odoo(no_cache):
 
     try:
         with open(file_path + RESOURCES_DIR + "/Dockerfile", "w") as Dockerfile:
-            dockerfile_path = (
-                file_path + RESOURCES_DIR + "/dockerfiles/" + ODOO_VERSION + "_Dockerfile"
-            )
+            dockerfile_path = file_path + RESOURCES_DIR + "/dockerfiles/" + ODOO_VERSION + "_Dockerfile"
             dockerfile_template_path = file_path + RESOURCES_DIR + "/Dockerfile.template"
             print(dockerfile_template_path)
 
@@ -64,7 +64,8 @@ def build_odoo(no_cache):
         print("Construyendo Odoo con caché...")
         os.system("docker compose build")
 
-def reset_password(d,l="admin"):
+
+def reset_password(d, l="admin"):
     load_dotenv()
     PROJECT_NAME = os.getenv("PROJECT_NAME")
     POSTGRES_USER = os.getenv("POSTGRES_USER")
@@ -73,9 +74,11 @@ def reset_password(d,l="admin"):
     password = f"'{RESET_PASSWORD}'"
     login = f"'{l}'"
     os.system(
-        f'docker exec -it -e PGPASSWORD={POSTGRES_PASSWORD} {PROJECT_NAME} psql --host {PROJECT_NAME}_db -U {POSTGRES_USER} -d {d} -c "update res_users set password = {password} where login = {login};"')
+        f'docker exec -it -e PGPASSWORD={POSTGRES_PASSWORD} {PROJECT_NAME} psql --host {PROJECT_NAME}_db -U {POSTGRES_USER} -d {d} -c "update res_users set password = {password} where login = {login};"'
+    )
     os.system(
-        f'docker exec -it -e PGPASSWORD={POSTGRES_PASSWORD} {PROJECT_NAME} psql --host {PROJECT_NAME}_db -U {POSTGRES_USER} -d {d} -c "delete from ir_config_parameter where key in (\'report.url\',\'web.base.url.freeze\');"')
+        f"docker exec -it -e PGPASSWORD={POSTGRES_PASSWORD} {PROJECT_NAME} psql --host {PROJECT_NAME}_db -U {POSTGRES_USER} -d {d} -c \"delete from ir_config_parameter where key in ('report.url','web.base.url.freeze');\""
+    )
 
 
 def run_odoo():
@@ -103,6 +106,7 @@ def psql(d):
         f"docker exec -it -e PGPASSWORD={POSTGRES_PASSWORD} {PROJECT_NAME} psql --host {PROJECT_NAME}_db -U {POSTGRES_USER} -d {d}"
     )
 
+
 # def run_tests(args):
 #     load_dotenv()
 #     PROJECT_NAME = os.getenv("PROJECT_NAME","")
@@ -110,8 +114,10 @@ def psql(d):
 #     container = "docker exec -uodoo -it " + PROJECT_NAME
 #     test_tags = "/binaural_accountant"
 
-#     modules = ["l10n_ve","binaural_rate","account","binaural_accountant"] 
+#     modules = ["l10n_ve","binaural_rate","account","binaural_accountant"]
 #     os.system(f"{container} odoo --test-tags {test_tags} -d {database} -i {','.join(modules)} --without-demo=True --stop-after-init -c /home/odoo/.config/odoo.conf")
+# ./odoo-bin --stop-after-init --no-http -c /etc/odoo-test-server.conf -d test_db
+
 
 def run_update(d, modules):
     load_dotenv()
@@ -119,8 +125,19 @@ def run_update(d, modules):
     print(f"docker exec -it {PROJECT_NAME} odoo -d {d} -u {' '.join(modules)}")
     os.system(f"docker exec -u odoo -it {PROJECT_NAME} odoo -d {d} -u {' '.join(modules)} --stop-after-init")
 
+
 def run_backup(database):
-    os.system(f"docker exec -it -e PGPASSWORD=odoo,HOST=localhost,USER=odoo /home/odoo/src/backup.sh")
+    PROJECT_NAME = os.getenv("PROJECT_NAME")
+    os.system(
+        f"docker exec -it -e PGPASSWORD=odoo,HOST=localhost,USER=odoo {PROJECT_NAME} /home/odoo/backups/scripts/backup.sh"
+    )
+
+
+def run_restore(file, db_name):
+    PROJECT_NAME = os.getenv("PROJECT_NAME")
+    os.system(
+        f"docker exec -it -e PASSWORD=odoo -e HOST={PROJECT_NAME}_db -e USER=odoo {PROJECT_NAME} /home/odoo/backups/scripts/restore.sh {file} {db_name}"
+    )
 
 
 def main():
@@ -142,7 +159,7 @@ def main():
     build_parser.add_argument("--no-cache", action="store_true", help="Construir sin usar caché")
 
     psql_parser = subparsers.add_parser("psql", help="psql")
-    psql_parser.add_argument("database",help="Database name")
+    psql_parser.add_argument("database", help="Database name")
 
     reset_parser = subparsers.add_parser("reset", help="Sync Submodules")
     reset_parser.add_argument("database", help="database")
@@ -154,6 +171,10 @@ def main():
 
     backup_parser = subparsers.add_parser("backup", help="Backup")
     backup_parser.add_argument("database", help="database")
+
+    restore_parser = subparsers.add_parser("restore", help="Restore")
+    restore_parser.add_argument("file", help="file")
+    restore_parser.add_argument("database", help="database")
 
     new_module_parser = subparsers.add_parser("nm", help="New Module")
     new_module_parser.add_argument("module_name", help="Module Name")
@@ -177,13 +198,15 @@ def main():
     elif args.action == "psql":
         psql(args.database)
     elif args.action == "reset":
-        reset_password(args.database,l=args.l)
+        reset_password(args.database, l=args.l)
     elif args.action == "u":
         run_update(args.database, args.modules.split(","))
     elif args.action == "backup":
         run_backup(args.database)
     elif args.action == "nm":
         run_new_module(args.module_name)
+    elif args.action == "restore":
+        run_restore(args.file, args.database)
     # else:
     #     PROJECT_NAME = os.getenv("PROJECT_NAME")
     #     print(args)

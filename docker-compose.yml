@@ -48,6 +48,7 @@ services:
     volumes:
       - odoo-web:/var/lib/odoo
       - ./src:/home/odoo/src
+      - ./backups:/home/odoo/backups
       - odoo_data:/home/odoo/data
       - py3:/usr/local/lib/
       - py:/usr/lib/
