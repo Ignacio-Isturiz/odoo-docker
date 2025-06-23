@@ -1,21 +1,4 @@
 services:
-  traefik:
-      container_name: ${PROJECT_NAME}_traefik
-      image: traefik:v1.7.33-alpine
-      command:
-          - --api
-          - --docker
-          - --docker.domain=localhost
-          - --docker.exposedbydefault=false
-      labels:
-          - traefik.enable=true
-          - traefik.port=8080
-          - traefik.frontend.rule=Host:traefik.localhost
-      volumes:
-          - /var/run/docker.sock:/var/run/docker.sock:ro
-      restart: unless-stopped
-      # para que funcione la solución *.localhost
-      network_mode: "host"
   db:
     image: postgres:${POSTGRES_IMG_VERSION}
     container_name: ${PROJECT_NAME}_db
@@ -28,14 +11,6 @@ services:
       - odoo-db:/var/lib/postgresql/data/pgdata
     networks:
       - binaural
-  dns:
-    image: cytopia/bind:alpine-0.30
-    environment:
-      DNS_A: "*.odoo.localhost=172.20.${ODOO_MINOR}.1"
-      DNS_FORWARDER: 127.0.0.11
-    networks:
-      binaural:
-        ipv4_address: 172.20.${ODOO_MINOR}.10
   odoo:
     container_name: ${PROJECT_NAME}
     build:
@@ -43,27 +18,17 @@ services:
         dockerfile: ./.resources/Dockerfile
     depends_on:
       - db
-      - dns
-      - traefik
+    ports:
+      - "${PORT_SERVICE_HOST_ODOO}:${PORT_SERVICE_CONTAINER_ODOO}"
     volumes:
       - odoo-web:/var/lib/odoo
       - ./src:/home/odoo/src
       - ./backups:/home/odoo/backups
       - odoo_data:/home/odoo/data
-      - py3:/usr/local/lib/
-      - py:/usr/lib/
-    command: odoo --dev=all
-    labels:
-      - traefik.enable=true
-      - traefik.frontend.port=8069
-      - traefik.frontend.rule=HostRegexp:$DOMAIN,{subdomain:[a-z0-9-_]+}.$DOMAIN
-      # - traefik.frontend.priority=10
-      # - traefik.longpolling.port=8072
-      # - traefik.longpolling.frontend.rule=HostRegexp:$DOMAIN,{subdomain:[a-z0-9-_]+}.$DOMAIN;PathPrefix:/longpolling/
-      - traefik.backend.loadbalancer.stickiness=true
-      - traefik.backend.loadbalancer.method=drr
-      # traefik.frontend.redirect.regex: $strTraefikRedirectRegex
-      # traefik.frontend.redirect.replacement: $strTraefikRedirectReplacement
+      # - dep:/usr/lib
+      # - dep2:/usr/local/lib
+      # - dep3:/home/odoo/.local/lib
+    command: odoo -u binaural_accountant --dev=all
     environment:
       CUSTOM_CONFIG: |-
         [options]
@@ -91,8 +56,6 @@ services:
       LIMIT_TIME_REAL: ${LIMIT_TIME_REAL}
       UNACCENT: ${UNACCENT}
       LOG_LEVEL: info
-    dns:
-      - 172.20.${ODOO_MINOR}.10
     networks:
       binaural:
 
@@ -100,13 +63,7 @@ volumes:
   odoo-web:
   odoo-db:
   odoo_data:
-  py3:
-  py:
 
 networks:
   binaural:
-    external: false
-    name: odoo-${ODOO_VERSION}
-    ipam:
-      config:
-        - subnet: 172.20.${ODOO_MINOR}.0/24
+    external: true

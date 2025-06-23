@@ -1,4 +1,21 @@
 services:
+  traefik:
+      container_name: ${PROJECT_NAME}_traefik
+      image: traefik:v1.7.33-alpine
+      command:
+          - --api
+          - --docker
+          - --docker.domain=localhost
+          - --docker.exposedbydefault=false
+      labels:
+          - traefik.enable=true
+          - traefik.port=8080
+          - traefik.frontend.rule=Host:traefik.localhost
+      volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+      restart: unless-stopped
+      # para que funcione la solución *.localhost
+      network_mode: "host"
   db:
     image: postgres:${POSTGRES_IMG_VERSION}
     container_name: ${PROJECT_NAME}_db
@@ -11,6 +28,14 @@ services:
       - odoo-db:/var/lib/postgresql/data/pgdata
     networks:
       - binaural
+  dns:
+    image: cytopia/bind:alpine-0.30
+    environment:
+      DNS_A: "*.odoo.localhost=172.20.${ODOO_MINOR}.1"
+      DNS_FORWARDER: 127.0.0.11
+    networks:
+      binaural:
+        ipv4_address: 172.20.${ODOO_MINOR}.10
   odoo:
     container_name: ${PROJECT_NAME}
     build:
@@ -18,13 +43,16 @@ services:
         dockerfile: ./.resources/Dockerfile
     depends_on:
       - db
-    ports:
-      - "${PORT_SERVICE_HOST_ODOO}:${PORT_SERVICE_CONTAINER_ODOO}"
+      - dns
+      - traefik
     volumes:
       - odoo-web:/var/lib/odoo
       - ./src:/home/odoo/src
+      - ./backups:/home/odoo/backups
       - odoo_data:/home/odoo/data
-    command: odoo -u binaural_accountant --dev=all
+      - py3:/usr/local/lib/
+      - py:/usr/lib/
+    command: odoo --dev=all
     labels:
       - traefik.enable=true
       - traefik.frontend.port=8069
@@ -51,6 +79,8 @@ services:
       SERVER_WIDE_MODULES: ${SERVER_WIDE_MODULES}
       MAX_CRON_THREADS: ${MAX_CRON_THREADS}
       WORKERS: ${WORKERS}
+      CUSTOM_ENABLED: ${CUSTOM_ENABLED}
+      IGNORE_REPO: ${IGNORE_REPO}
       LIST_DB: ${LIST_DB}
       WITHOUT_DEMO: ${WITHOUT_DEMO}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
@@ -61,6 +91,8 @@ services:
       LIMIT_TIME_REAL: ${LIMIT_TIME_REAL}
       UNACCENT: ${UNACCENT}
       LOG_LEVEL: info
+    dns:
+      - 172.20.${ODOO_MINOR}.10
     networks:
       binaural:
 
@@ -68,8 +100,13 @@ volumes:
   odoo-web:
   odoo-db:
   odoo_data:
+  py3:
+  py:
 
 networks:
   binaural:
     external: false
     name: odoo-${ODOO_VERSION}
+    ipam:
+      config:
+        - subnet: 172.20.${ODOO_MINOR}.0/24
