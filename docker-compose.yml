@@ -61,7 +61,7 @@ services:
 
 volumes:
   odoo-web:
-  odoo-db:
+  odoo-db:  
   odoo_data:
 
 networks:
